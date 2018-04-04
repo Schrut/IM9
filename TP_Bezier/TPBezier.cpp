@@ -18,6 +18,8 @@
 
 #include "point3.h"
 
+#include "math.h"
+
 #define KEY_ESC 27
 
 using namespace std;
@@ -37,11 +39,74 @@ int oldMouseX = windowHeight/2;
 int oldMouseY = windowWidth/2;
 
 std::deque<point3> * controlPointList;// la structure pour les points de contrôle (sans classe à tous les points de vue)
+std::deque<point3> * pts_curve; //La structure où l'on stock les points de la courbe
 
 GLuint leVBO;//pour afficher les points de contrôle
+GLuint leVBO2;//pour afficher la courbe
 
-void drawAxis() {
-	glBegin(GL_LINES);
+int resolution = 50;
+
+//Factoriel
+int factorial(int n)
+{
+	if (n > 1)
+		return n * factorial(n - 1);
+	else
+		return 1;
+}
+
+//Polynôme de Bernstein
+double bernstein_polynome(int i, int n, double t)
+{
+	return double((factorial(n) / (factorial(i) * factorial(n - i))) * pow(t, i) * pow(1 - t, n - i));
+}
+
+//Compute Bezier
+point3 bezier_compute_coeff(std::deque<point3>* control_pts, double t)
+{
+	point3 tmp = point3();
+	point3 p = point3();
+
+	for (unsigned int i = 0 ; i < control_pts->size(); i++)
+	{
+		tmp = control_pts->at(i) * bernstein_polynome(i, control_pts->size()-1, t);
+		p = p + tmp;
+	}
+	return p;
+}
+
+//Affichage courbe de Bézier avec la formule classique
+static GLvoid bezier_classic_render()
+{
+	pts_curve = new std::deque<point3>();
+
+	for (int i = 0; i < resolution; i++)
+	{
+		pts_curve->push_back(bezier_compute_coeff(controlPointList, i/double(resolution)));
+	}
+}
+
+//Algorithme de Casteljau
+static GLvoid bezier_casteljau()
+{
+	std::deque<point3> *prev_castel = new std::deque<point3>;
+
+	pts_curve = new std::deque<point3>();
+
+	for (unsigned int i = 0; i <= controlPointList->size(); ++i)
+	{
+		prev_castel->push_back(controlPointList->at(i));
+	}
+
+	for (std::deque<point3>::iterator it = controlPointList->begin(); it != controlPointList->end(); ++it)
+	{
+		
+	}
+}
+
+	void drawAxis()
+	{
+		glBegin(GL_LINES);
 		//Ox, rouge
 		glColor3f(1.0, 0.0, 0.0);
 		glVertex3f(0.0, 0.0, 0.0);
@@ -63,6 +128,7 @@ void drawAxis() {
 static void RenderScene()
 {
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
 
 	//Modification de la matrice de projection
 	glMatrixMode(GL_PROJECTION);
@@ -101,6 +167,15 @@ static void RenderScene()
 		glPointSize(10.0f);
 		glDrawArrays(GL_POINTS, 0, controlPointList -> size()); //les éléments à utiliser pour le dessin
 
+	//dessin du polygone de contrôle
+	glColor3f(0.9, 0.4, 0.4);
+
+		//Liaison avec le buffer de vertex
+		glBindBuffer(GL_ARRAY_BUFFER, leVBO2);
+		glVertexPointer(3, GL_DOUBLE, 0, 0); //description des données pointées
+
+	glDrawArrays(GL_LINE_STRIP, 0, pts_curve -> size()); //les éléments à utiliser pour le dessin
+	
 	glDisableClientState(GL_VERTEX_ARRAY);
 
 	glutSwapBuffers();
@@ -204,6 +279,23 @@ static void CreateVertexBuffer()
  	glGenBuffers(1, &leVBO); //génération d'une référence de buffer object
 	glBindBuffer(GL_ARRAY_BUFFER, leVBO); //liaison du buffer avec un type tableau de données
 	glBufferData(GL_ARRAY_BUFFER, sizeof(float)*controlPointList -> size() * 3, vertices, GL_STATIC_DRAW); //création et initialisation du container de données (size() sommets -> 3*size() floats)
+
+	double vertices2[pts_curve->size() * 3]; //sommets à 3 coordonnées x,y,z par point
+
+
+	n = 0;
+
+	for (std::deque<point3>::iterator it = pts_curve->begin(); it != pts_curve->end(); ++it)
+	{
+		vertices2[n] = (*it).x;
+		vertices2[n + 1] = (*it).y;
+		vertices2[n + 2] = (*it).z;
+		n += 3;
+	}
+
+	glGenBuffers(1, &leVBO2);																																				//génération d'une référence de buffer object
+	glBindBuffer(GL_ARRAY_BUFFER, leVBO2);																													//liaison du buffer avec un type tableau de données
+	glBufferData(GL_ARRAY_BUFFER, sizeof(double) * pts_curve->size() * 3, vertices2, GL_STATIC_DRAW); //création et initialisation du container de données (size() sommets -> 3*size() floats)
 }
 
 
@@ -216,6 +308,8 @@ void InitializeGeometry() {
 	controlPointList -> push_back(point3(-1.0, 1.0, 0.0));
 	controlPointList -> push_back(point3(1.0, 1.0, 0.0));
 	controlPointList -> push_back(point3(2.0, -2.0, 0.0));
+
+	bezier_classic_render();
 
 	CreateVertexBuffer();
 }
