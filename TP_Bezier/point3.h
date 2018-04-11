@@ -27,6 +27,8 @@ public:
 	point3& operator/=(const double); //division par un scalaire
 	point3 operator/(const double)const; //idem
 
+	double dot(point3 a,point3 b);
+
 	friend ostream& operator<<(ostream&, point3); //affichage éventuels
 };
 

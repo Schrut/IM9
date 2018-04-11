@@ -38,7 +38,15 @@ float mouseAngleY = 0.0;
 int oldMouseX = windowHeight/2;
 int oldMouseY = windowWidth/2;
 
+std::deque<double>* curr_deviation;
+
 int casteljau = 0;
+
+int bezier_chaikin = 0;
+
+int control_poly = 0;
+
+int degree_chaikin = 1;
 
 std::deque<point3> * controlPointList;// la structure pour les points de contrôle (sans classe à tous les points de vue)
 std::deque<point3> * pts_curve; //La structure où l'on stock les points de la courbe
@@ -125,13 +133,102 @@ static GLvoid bezier_casteljau_render()
 {
 
 	pts_curve = new std::deque<point3>();
+
 	for (int i = 0; i <= resolution; i++)
 	{
 		pts_curve->push_back(bezier_casteljau_compute(controlPointList, i / double(resolution)));
 	}
 }
 
-	void drawAxis()
+point3 made_vector (point3 a, point3 b)
+{
+	point3 vec = point3();
+
+	vec.x = b.x - a.x;
+	vec.y = b.y - a.y;
+	vec.z = b.z - a.z;
+
+	return vec;
+}
+
+double dot(point3 a, point3 b)
+{
+	return a.x * b.x + a.y * b.y + a.z * b.z;
+}
+
+double norm(point3 a)
+{
+	return sqrt( pow(a.x,2) + pow(a.y,2) + pow(a.z,2) );
+}
+
+double deviation(point3 a, point3 b)
+{
+	return dot(a,b) / (norm(a) * norm(b));
+}
+
+double mean_deviation()
+{
+	double sum = 0;
+	for (unsigned int k = 0; k < curr_deviation->size(); ++k)
+	{
+		sum += curr_deviation->at(k);
+	}
+	return sum/curr_deviation->size();
+}
+
+double max_deviation()
+{
+	double maximum;
+	maximum = curr_deviation->at(0);
+	for (unsigned int k = 1; k < curr_deviation->size(); ++k)
+	{
+		if (curr_deviation->at(k) > maximum)
+			maximum = curr_deviation->at(k);
+	}
+	return maximum;
+}
+
+double min_deviation()
+{
+	double minimum;
+	minimum = curr_deviation->at(0);
+	for (unsigned int k = 1; k < curr_deviation->size(); ++k)
+	{
+		if (curr_deviation->at(k) < minimum)
+			minimum = curr_deviation->at(k);
+	}
+	return minimum;
+}
+
+static GLvoid chaikin_render()
+{
+	std::deque<point3> *prev_chaikin;
+
+	pts_curve = new std::deque<point3>;
+
+	for (unsigned int k = 0; k < controlPointList->size(); ++k)
+	{
+		pts_curve->push_back(controlPointList->at(k));
+	}
+
+	for(int i = 0; i < degree_chaikin ; i++)
+	{
+		prev_chaikin = new std::deque<point3>;
+		for (unsigned int k = 0; k < pts_curve->size(); ++k)
+		{
+			prev_chaikin->push_back(pts_curve->at(k));
+		}
+
+		pts_curve = new std::deque<point3>;
+		for (unsigned int k = 0; k < prev_chaikin->size() - 1 ; ++k)
+		{
+			pts_curve->push_back(prev_chaikin->at(k) + made_vector(prev_chaikin->at(k), prev_chaikin->at(k + 1)) * (1 / 4.0));
+			pts_curve->push_back(prev_chaikin->at(k) + made_vector(prev_chaikin->at(k), prev_chaikin->at(k + 1)) * (3 / 4.0));
+		}
+	}
+}
+
+void drawAxis()
 	{
 		glBegin(GL_LINES);
 		//Ox, rouge
@@ -177,31 +274,33 @@ static void RenderScene()
 	//dessin des axes du repère
 	//drawAxis();
 
+	glEnableClientState(GL_VERTEX_ARRAY);
+	if(control_poly)
+	{
 	//dessin du polygone de contrôle
 	glColor3f(0.4, 0.4, 0.4);
 
 		//Liaison avec le buffer de vertex
-		glEnableClientState(GL_VERTEX_ARRAY);
 		glBindBuffer(GL_ARRAY_BUFFER, leVBO);
 		glVertexPointer(3, GL_FLOAT, 0, 0); //description des données pointées
 
 	glDrawArrays(GL_LINE_STRIP, 0, controlPointList -> size()); //les éléments à utiliser pour le dessin
-
+	
 	//dessin des points de contrôle
 	//avec le même tableau de donnes (le VBO)
 	glColor3f(0.8, 0.8, 0.3);
 		//on modifie la taille d'un point pour plus de "joliesse"
 		glPointSize(10.0f);
 		glDrawArrays(GL_POINTS, 0, controlPointList -> size()); //les éléments à utiliser pour le dessin
-
-	//dessin du polygone de contrôle
+	}
+	//dessin de la courbe de contrôle
 	glColor3f(0.9, 0.4, 0.4);
 
 		//Liaison avec le buffer de vertex
 		glBindBuffer(GL_ARRAY_BUFFER, leVBO2);
 		glVertexPointer(3, GL_DOUBLE, 0, 0); //description des données pointées
 
-	glDrawArrays(GL_LINE_STRIP, 0, pts_curve -> size()); //les éléments à utiliser pour le dessin
+	glDrawArrays(GL_LINE_STRIP, 0, pts_curve->size()); //les éléments à utiliser pour le dessin
 	
 	glDisableClientState(GL_VERTEX_ARRAY);
 
@@ -243,7 +342,6 @@ static GLvoid callback_Mouse(int wx, int wy) {
 
 	//cout << "callback_Mouse - " << "mouseAngleX " << mouseAngleX << " mouseAngleY " << mouseAngleY << endl;
 }
-
 
 
 static void InitializeGL() {
@@ -300,11 +398,42 @@ void InitializeGeometry() {
 	controlPointList -> push_back(point3(1.0, 1.0, 0.0));
 	controlPointList -> push_back(point3(2.0, -2.0, 0.0));
 
-	if(casteljau)
-		bezier_casteljau_render();
+	if(bezier_chaikin)
+	{
+		if(casteljau)
+			bezier_casteljau_render();
+		else
+			bezier_classic_render();
+	}
 	else
-		bezier_classic_render();
+		chaikin_render();
 
+	curr_deviation = new std::deque<double>;
+	for (unsigned int k = 1; k < pts_curve->size() - 1; ++k)
+	{
+		curr_deviation->push_back(deviation(pts_curve->at(k), pts_curve->at(k + 1)));
+	}
+
+	if (bezier_chaikin)
+	{
+		if (casteljau)
+			cout << "Courbe de Bezier par De Casteljau" << endl;
+		else
+			cout << "Courbe de Bezier" << endl;
+		cout << "Resolution : " << resolution << endl;
+	}
+	else
+	{
+		cout << "Subdivision de Chaikin" << endl;
+		cout << "Nb Chaikin : " << degree_chaikin << endl;
+	}
+
+	cout << "Moyenne de deviation : " << mean_deviation() << endl;
+	cout << "Max de deviation : " << max_deviation() << endl;
+	cout << "Min de deviation : " << min_deviation() << endl;
+	cout << "Nb deviation : " << pts_curve->size() << endl;
+
+	cout << "-----------" << endl;
 	CreateVertexBuffer();
 }
 
@@ -317,19 +446,47 @@ static GLvoid callback_Keyboard(unsigned char key, int x, int y)
 		glutLeaveMainLoop ( ); //retour au main()
 	break;
 
-	case 'b' : 
+	case 'c' : 
 	casteljau = !casteljau;
-
-	if (casteljau)
-		cout << "Courbe de bezier par De Casteljau" << endl;
-	else
-		cout << "Courbe de Bezier classique" << endl;
-
 	InitializeGeometry();
 	break;
 
-  default:
-    	cerr << "callback_Keyboard - touche " << key << " non active." << endl;
+	case 'b':
+		bezier_chaikin = !bezier_chaikin;
+		InitializeGeometry();
+		break;
+
+	case '+':
+		if(bezier_chaikin)
+		{
+			resolution += 1;
+		}
+		else
+		{
+		degree_chaikin++;
+		}
+		InitializeGeometry();
+		break;
+
+	case '-':
+		if (bezier_chaikin)
+		{
+			resolution -= 1;
+		}
+		else
+		{
+			degree_chaikin--;
+		}
+		InitializeGeometry();
+			break;
+
+	case 'p':
+		control_poly = !control_poly;
+		InitializeGeometry();
+		break;
+
+	default:
+		cerr << "callback_Keyboard - touche " << key << " non active." << endl;
     break;
   }
 }
