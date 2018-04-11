@@ -38,13 +38,15 @@ float mouseAngleY = 0.0;
 int oldMouseX = windowHeight/2;
 int oldMouseY = windowWidth/2;
 
+int casteljau = 0;
+
 std::deque<point3> * controlPointList;// la structure pour les points de contrôle (sans classe à tous les points de vue)
 std::deque<point3> * pts_curve; //La structure où l'on stock les points de la courbe
 
 GLuint leVBO;//pour afficher les points de contrôle
 GLuint leVBO2;//pour afficher la courbe
 
-int resolution = 50;
+int resolution = 10;
 
 //Factoriel
 int factorial(int n)
@@ -62,7 +64,7 @@ double bernstein_polynome(int i, int n, double t)
 }
 
 //Compute Bezier
-point3 bezier_compute_coeff(std::deque<point3>* control_pts, double t)
+point3 bezier_classic_compute(std::deque<point3>* control_pts, double t)
 {
 	point3 tmp = point3();
 	point3 p = point3();
@@ -80,27 +82,52 @@ static GLvoid bezier_classic_render()
 {
 	pts_curve = new std::deque<point3>();
 
-	for (int i = 0; i < resolution; i++)
+	for (int i = 0; i <= resolution; i++)
 	{
-		pts_curve->push_back(bezier_compute_coeff(controlPointList, i/double(resolution)));
+		pts_curve->push_back(bezier_classic_compute(controlPointList, i/double(resolution)));
 	}
 }
 
-//Algorithme de Casteljau
-static GLvoid bezier_casteljau()
+point3 bezier_casteljau_compute(std::deque<point3>* control_pts, double t)
 {
-	std::deque<point3> *prev_castel = new std::deque<point3>;
+	std::deque<point3>* prev_castel;
+	std::deque<point3>* curr_castel;
+	
+	curr_castel = new std::deque<point3>;
 
-	pts_curve = new std::deque<point3>();
-
-	for (unsigned int i = 0; i <= controlPointList->size(); ++i)
+	for (unsigned int k = 0; k < control_pts->size(); ++k)
 	{
-		prev_castel->push_back(controlPointList->at(i));
+		curr_castel->push_back(control_pts->at(k));
 	}
 
-	for (std::deque<point3>::iterator it = controlPointList->begin(); it != controlPointList->end(); ++it)
+	for (unsigned int i = 0; i < controlPointList->size() - 2; ++i)
 	{
-		
+
+		prev_castel = new std::deque<point3>;
+		for (unsigned int k = 0; k < curr_castel->size(); ++k)
+		{
+			prev_castel->push_back(curr_castel->at(k));
+		}
+
+		curr_castel = new std::deque<point3>;
+
+		for (unsigned int k = 0; k < prev_castel->size() - 1; ++k)
+		{
+			curr_castel->push_back(prev_castel->at(k)*(1-t) + prev_castel->at(k+1)*(t));
+		}
+	}
+
+	return curr_castel->at(0) * (1 - t) + curr_castel->at(1) * (t);
+}
+
+//Algorithme de Casteljau
+static GLvoid bezier_casteljau_render()
+{
+
+	pts_curve = new std::deque<point3>();
+	for (int i = 0; i <= resolution; i++)
+	{
+		pts_curve->push_back(bezier_casteljau_compute(controlPointList, i / double(resolution)));
 	}
 }
 
@@ -189,21 +216,6 @@ static GLvoid callback_Idle()
 
 }
 
-// fonction de call-back pour la gestion des evenements clavier
-static GLvoid callback_Keyboard(unsigned char key, int x, int y)
-{
-  switch (key) {
-  case KEY_ESC:
-	cout << "callback_Keyboard - " << "sortie de la boucle de rendu" << endl;
-		glutLeaveMainLoop ( ); //retour au main()
-	break;
-
-  default:
-    	cerr << "callback_Keyboard - touche " << key << " non active." << endl;
-    break;
-  }
-}
-
 
 //fonction de call-back pour le redimensionnement de la fenêtre
 static GLvoid callback_Window(GLsizei width, GLsizei height)
@@ -233,27 +245,6 @@ static GLvoid callback_Mouse(int wx, int wy) {
 }
 
 
-static void InitializeGlutCallbacks()
-{
-	//quelle fonction est appelée au rendu ?
-	glutDisplayFunc(RenderScene);
-
-	//quelle fonction est appelée quand le GPU est en attente ?
-	glutIdleFunc(callback_Idle);
-
-	//quelle fonction est appelée pour traiter les événements du clavier (classique) ?
-	glutKeyboardFunc(callback_Keyboard);
-
-	//quelle fonction est appelée pour traiter les événements souris ?
-	glutMotionFunc(callback_Mouse);
-
-	//quelle fonction est appelée pour traiter les événements sur la fenêtre ?
-	glutReshapeFunc(callback_Window);
-
-	//quelle fonction est appelée pour traiter les touches spéciales du clavier ?
-	//glutSpecialFunc(&callback_SpecialKeys);
-
-}
 
 static void InitializeGL() {
 
@@ -309,9 +300,60 @@ void InitializeGeometry() {
 	controlPointList -> push_back(point3(1.0, 1.0, 0.0));
 	controlPointList -> push_back(point3(2.0, -2.0, 0.0));
 
-	bezier_classic_render();
+	if(casteljau)
+		bezier_casteljau_render();
+	else
+		bezier_classic_render();
 
 	CreateVertexBuffer();
+}
+
+// fonction de call-back pour la gestion des evenements clavier
+static GLvoid callback_Keyboard(unsigned char key, int x, int y)
+{
+  switch (key) {
+  case KEY_ESC:
+	cout << "callback_Keyboard - " << "sortie de la boucle de rendu" << endl;
+		glutLeaveMainLoop ( ); //retour au main()
+	break;
+
+	case 'b' : 
+	casteljau = !casteljau;
+
+	if (casteljau)
+		cout << "Courbe de bezier par De Casteljau" << endl;
+	else
+		cout << "Courbe de Bezier classique" << endl;
+
+	InitializeGeometry();
+	break;
+
+  default:
+    	cerr << "callback_Keyboard - touche " << key << " non active." << endl;
+    break;
+  }
+}
+
+static void InitializeGlutCallbacks()
+{
+	//quelle fonction est appelée au rendu ?
+	glutDisplayFunc(RenderScene);
+
+	//quelle fonction est appelée quand le GPU est en attente ?
+	glutIdleFunc(callback_Idle);
+
+	//quelle fonction est appelée pour traiter les événements du clavier (classique) ?
+	glutKeyboardFunc(callback_Keyboard);
+
+	//quelle fonction est appelée pour traiter les événements souris ?
+	glutMotionFunc(callback_Mouse);
+
+	//quelle fonction est appelée pour traiter les événements sur la fenêtre ?
+	glutReshapeFunc(callback_Window);
+
+	//quelle fonction est appelée pour traiter les touches spéciales du clavier ?
+	//glutSpecialFunc(&callback_SpecialKeys);
+
 }
 
 int main(int argc, char** argv)
