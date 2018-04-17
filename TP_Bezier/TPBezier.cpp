@@ -1,8 +1,8 @@
-//R. RAFFIN, IUT Aix-Marseille, département Informatique, site d'Arles
+//GIMENEZ Florian
+//Code dispo sur : https://github.com/Schrut/IM9
 //M1 IS IN IM9, UFR Sciences Marseille
-//romain.raffin[AT]univ-amu.fr
-//Squelette d'une gestion de courbe(s)) de Bézier : 1 structure pour stocker les points de contrôles, affiché sous forme de polygone
- 
+//Projet Final IM9
+
 //compilation par : g++ -Wall TPBezier.cpp -lGLEW -lGLU -lGL -lglut -o TPBezier
 
 #include <cstdio>
@@ -55,6 +55,8 @@ GLuint leVBO;//pour afficher les points de contrôle
 GLuint leVBO2;//pour afficher la courbe
 
 int resolution = 10;
+void InitializeGeometry();
+static void CreateVertexBuffer();
 
 //Factoriel
 int factorial(int n)
@@ -163,7 +165,7 @@ double norm(point3 a)
 
 double deviation(point3 a, point3 b)
 {
-	return dot(a,b) / (norm(a) * norm(b));
+	return acos(dot(a,b) / (norm(a) * norm(b)))*180.0/M_PI;
 }
 
 double mean_deviation()
@@ -267,34 +269,31 @@ static void RenderScene()
 	//Définition de la position de l'observateur
 	//gluLookAt(5.0, 5.0, 5.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0); //paramètres position(5.0, 5.0, 5.0), point visé(0.0, 0.0, 0.0), upVector - verticale (0.0, 1.0, 0.0)
 
-	//rotation due aux mouvements de la souris
-	glRotatef(mouseAngleX, 1.0, 0.0, 0.0);
-	glRotatef(mouseAngleY, 0.0, 1.0, 0.0);
-
 	//dessin des axes du repère
 	//drawAxis();
-
 	glEnableClientState(GL_VERTEX_ARRAY);
-	if(control_poly)
+	if (control_poly)
 	{
-	//dessin du polygone de contrôle
-	glColor3f(0.4, 0.4, 0.4);
+		//dessin du polygone de contrôle
+		glColor3f(0.4, 0.4, 0.4);
 
 		//Liaison avec le buffer de vertex
 		glBindBuffer(GL_ARRAY_BUFFER, leVBO);
 		glVertexPointer(3, GL_FLOAT, 0, 0); //description des données pointées
 
-	glDrawArrays(GL_LINE_STRIP, 0, controlPointList -> size()); //les éléments à utiliser pour le dessin
-	
-	//dessin des points de contrôle
-	//avec le même tableau de donnes (le VBO)
-	glColor3f(0.8, 0.8, 0.3);
+		glDrawArrays(GL_LINE_STRIP, 0, controlPointList->size()); //les éléments à utiliser pour le dessin
+
+		//dessin des points de contrôle
+		//avec le même tableau de donnes (le VBO)
+		glColor3f(0.8, 0.8, 0.3);
 		//on modifie la taille d'un point pour plus de "joliesse"
 		glPointSize(10.0f);
-		glDrawArrays(GL_POINTS, 0, controlPointList -> size()); //les éléments à utiliser pour le dessin
+		glDrawArrays(GL_POINTS, 0, controlPointList->size()); //les éléments à utiliser pour le dessin
 	}
-	//dessin de la courbe de contrôle
-	glColor3f(0.9, 0.4, 0.4);
+	if (controlPointList->size() > 2)
+	{
+		//dessin de la courbe de contrôle
+		glColor3f(0.9, 0.4, 0.4);
 
 		//Liaison avec le buffer de vertex
 		glBindBuffer(GL_ARRAY_BUFFER, leVBO2);
@@ -303,7 +302,7 @@ static void RenderScene()
 	glDrawArrays(GL_LINE_STRIP, 0, pts_curve->size()); //les éléments à utiliser pour le dessin
 	
 	glDisableClientState(GL_VERTEX_ARRAY);
-
+	}
 	glutSwapBuffers();
 }
 
@@ -329,18 +328,19 @@ static GLvoid callback_Window(GLsizei width, GLsizei height)
 	//cout << "callback_Window - " << "new width " << windowWidth << " new height " << windowHeight << endl;
 }
 
-static GLvoid callback_Mouse(int wx, int wy) {
+static GLvoid callback_Mouse(int button, int state, int x, int y) {
 //rotation de la scene suivant les mouvements de la souris
-	int dx = oldMouseX - wx;
-	int dy = oldMouseY - wy;
 
-	oldMouseX = wx;
-	oldMouseY = wy;
+	double y_disp = ((windowHeight - y) * (10.0 / windowHeight ) ) - 5 ;
+	double x_disp = (x * (10.0 / windowWidth ) ) - 5 ;
+	if (state == GLUT_DOWN && button == GLUT_LEFT_BUTTON)
+	{
+		cout << x_disp << "---" << y_disp << "--- taille " << controlPointList->size() << endl;
+		controlPointList->push_back(point3(x_disp, y_disp, 0.0));
+		CreateVertexBuffer();
+	}
 
-	mouseAngleX += dy;
-	mouseAngleY += dx;
-
-	//cout << "callback_Mouse - " << "mouseAngleX " << mouseAngleX << " mouseAngleY " << mouseAngleY << endl;
+//cout << "callback_Mouse - " << "mouseAngleX " << mouseAngleX << " mouseAngleY " << mouseAngleY << endl;
 }
 
 
@@ -354,50 +354,50 @@ static void InitializeGL() {
 
 static void CreateVertexBuffer()
 {
-	float vertices[controlPointList -> size()*3]; //sommets à 3 coordonnées x,y,z par point
 
-	unsigned n = 0;
+		float vertices[controlPointList->size() * 3]; //sommets à 3 coordonnées x,y,z par point
 
-	for (std::deque<point3>::iterator it = controlPointList -> begin(); it != controlPointList-> end(); ++it) {
-		vertices[n] = (*it).x;
-		vertices[n+1] = (*it).y;
-		vertices[n+2] = (*it).z;
-		n += 3;
-	}
+		unsigned n = 0;
 
- 	glGenBuffers(1, &leVBO); //génération d'une référence de buffer object
-	glBindBuffer(GL_ARRAY_BUFFER, leVBO); //liaison du buffer avec un type tableau de données
-	glBufferData(GL_ARRAY_BUFFER, sizeof(float)*controlPointList -> size() * 3, vertices, GL_STATIC_DRAW); //création et initialisation du container de données (size() sommets -> 3*size() floats)
+		for (std::deque<point3>::iterator it = controlPointList->begin(); it != controlPointList->end(); ++it)
+		{
+			vertices[n] = (*it).x;
+			vertices[n + 1] = (*it).y;
+			vertices[n + 2] = (*it).z;
+			n += 3;
+		}
 
-	double vertices2[pts_curve->size() * 3]; //sommets à 3 coordonnées x,y,z par point
+		glGenBuffers(1, &leVBO);																																							 //génération d'une référence de buffer object
+		glBindBuffer(GL_ARRAY_BUFFER, leVBO);																																	 //liaison du buffer avec un type tableau de données
+		glBufferData(GL_ARRAY_BUFFER, sizeof(float) * controlPointList->size() * 3, vertices, GL_STATIC_DRAW); //création et initialisation du container de données (size() sommets -> 3*size() floats)
 
+		double vertices2[pts_curve->size() * 3]; //sommets à 3 coordonnées x,y,z par point
 
-	n = 0;
+		n = 0;
 
-	for (std::deque<point3>::iterator it = pts_curve->begin(); it != pts_curve->end(); ++it)
-	{
-		vertices2[n] = (*it).x;
-		vertices2[n + 1] = (*it).y;
-		vertices2[n + 2] = (*it).z;
-		n += 3;
-	}
+		for (std::deque<point3>::iterator it = pts_curve->begin(); it != pts_curve->end(); ++it)
+		{
+			vertices2[n] = (*it).x;
+			vertices2[n + 1] = (*it).y;
+			vertices2[n + 2] = (*it).z;
+			n += 3;
+		}
 
-	glGenBuffers(1, &leVBO2);																																				//génération d'une référence de buffer object
-	glBindBuffer(GL_ARRAY_BUFFER, leVBO2);																													//liaison du buffer avec un type tableau de données
-	glBufferData(GL_ARRAY_BUFFER, sizeof(double) * pts_curve->size() * 3, vertices2, GL_STATIC_DRAW); //création et initialisation du container de données (size() sommets -> 3*size() floats)
+		glGenBuffers(1, &leVBO2);																																					//génération d'une référence de buffer object
+		glBindBuffer(GL_ARRAY_BUFFER, leVBO2);																														//liaison du buffer avec un type tableau de données
+		glBufferData(GL_ARRAY_BUFFER, sizeof(double) * pts_curve->size() * 3, vertices2, GL_STATIC_DRAW); //création et initialisation du container de données (size() sommets -> 3*size() floats)
+	
 }
 
 
 void InitializeGeometry() {
-	controlPointList = new std::deque<point3>();
+
 	//d'après le sujet
 	//P_0(-2,-2,0) P_1=(-1,1,0) P_2=(1,1,0) P_3=(2,-2,0)
 
-	controlPointList -> push_back(point3(-2.0, -2.0, 0.0));
-	controlPointList -> push_back(point3(-1.0, 1.0, 0.0));
-	controlPointList -> push_back(point3(1.0, 1.0, 0.0));
-	controlPointList -> push_back(point3(2.0, -2.0, 0.0));
 
+if(controlPointList->size() > 3)
+{
 	if(bezier_chaikin)
 	{
 		if(casteljau)
@@ -409,9 +409,9 @@ void InitializeGeometry() {
 		chaikin_render();
 
 	curr_deviation = new std::deque<double>;
-	for (unsigned int k = 1; k < pts_curve->size() - 1; ++k)
+	for (unsigned int k = 0; k < pts_curve->size() - 2; ++k)
 	{
-		curr_deviation->push_back(deviation(pts_curve->at(k), pts_curve->at(k + 1)));
+		curr_deviation->push_back(deviation(made_vector(pts_curve->at(k),pts_curve->at(k + 1)),made_vector(pts_curve->at(k+1),pts_curve->at(k + 2))));
 	}
 
 	if (bezier_chaikin)
@@ -435,6 +435,7 @@ void InitializeGeometry() {
 
 	cout << "-----------" << endl;
 	CreateVertexBuffer();
+}
 }
 
 // fonction de call-back pour la gestion des evenements clavier
@@ -503,13 +504,21 @@ static void InitializeGlutCallbacks()
 	glutKeyboardFunc(callback_Keyboard);
 
 	//quelle fonction est appelée pour traiter les événements souris ?
-	glutMotionFunc(callback_Mouse);
+	glutMouseFunc(callback_Mouse);
 
 	//quelle fonction est appelée pour traiter les événements sur la fenêtre ?
 	glutReshapeFunc(callback_Window);
 
 	//quelle fonction est appelée pour traiter les touches spéciales du clavier ?
 	//glutSpecialFunc(&callback_SpecialKeys);
+
+	controlPointList = new std::deque<point3>();
+
+/*	controlPointList->push_back(point3(-2.0, -2.0, 0.0));
+	controlPointList->push_back(point3(-1.0, 1.0, 0.0));
+	controlPointList->push_back(point3(1.0, 1.0, 0.0));
+	controlPointList->push_back(point3(2.0, -2.0, 0.0));*/
+
 
 }
 
@@ -520,7 +529,7 @@ int main(int argc, char** argv)
 	glutInitWindowSize(windowWidth, windowHeight);
 	glutInitWindowPosition(100, 100);
 
-	glutCreateWindow("TP : courbe(s) de Bezier");
+	glutCreateWindow("TP IM9");
 
 
 	//toujours après l'initialisation de glut

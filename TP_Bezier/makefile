@@ -26,3 +26,8 @@ clean:
 
 archive:
 	tar czvf $(main).tgz *.cpp *.h makefile
+
+
+run: all
+	./$(main)
+
