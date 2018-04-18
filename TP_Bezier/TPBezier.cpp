@@ -44,19 +44,23 @@ int casteljau = 0;
 
 int bezier_chaikin = 0;
 
-int control_poly = 0;
+int control_poly = 1;
 
 int degree_chaikin = 1;
 
+std::deque< deque<point3> > * listControlPoly;
+
 std::deque<point3> * controlPointList;// la structure pour les points de contrôle (sans classe à tous les points de vue)
 std::deque<point3> * pts_curve; //La structure où l'on stock les points de la courbe
+
+
 
 GLuint leVBO;//pour afficher les points de contrôle
 GLuint leVBO2;//pour afficher la courbe
 
 int resolution = 10;
-void InitializeGeometry();
 static void CreateVertexBuffer();
+void ComputeGeometry();
 
 //Factoriel
 int factorial(int n)
@@ -98,48 +102,49 @@ static GLvoid bezier_classic_render()
 	}
 }
 
-point3 bezier_casteljau_compute(std::deque<point3>* control_pts, double t)
+void bezier_casteljau_compute(std::deque<point3>* control_pts, double t)
 {
 	std::deque<point3>* prev_castel;
 	std::deque<point3>* curr_castel;
-	
-	curr_castel = new std::deque<point3>;
 
-	for (unsigned int k = 0; k < control_pts->size(); ++k)
+	listControlPoly = new std::deque< deque<point3> >;
+
+	pts_curve = new std::deque<point3>;
+
+	listControlPoly->push_back(*control_pts);
+
+	for (unsigned int i = 0; i < controlPointList->size() - 1; ++i)
 	{
-		curr_castel->push_back(control_pts->at(k));
-	}
-
-	for (unsigned int i = 0; i < controlPointList->size() - 2; ++i)
-	{
-
-		prev_castel = new std::deque<point3>;
-		for (unsigned int k = 0; k < curr_castel->size(); ++k)
-		{
-			prev_castel->push_back(curr_castel->at(k));
-		}
-
 		curr_castel = new std::deque<point3>;
+		prev_castel = new std::deque<point3>;
 
-		for (unsigned int k = 0; k < prev_castel->size() - 1; ++k)
+		prev_castel->push_back(listControlPoly->at(i).at(0));
+		for (unsigned int k = 0; k < listControlPoly->at(i).size() - 1; ++k)
 		{
-			curr_castel->push_back(prev_castel->at(k)*(1-t) + prev_castel->at(k+1)*(t));
+			curr_castel->push_back(listControlPoly->at(i).at(k) * (1 - t) + listControlPoly->at(i).at(k + 1) * (t));
 		}
+		listControlPoly->push_back(*curr_castel);
 	}
 
-	return curr_castel->at(0) * (1 - t) + curr_castel->at(1) * (t);
+
+	pts_curve->push_back(control_pts->at(0));
+	pts_curve->push_back(prev_castel->at(0));
+	pts_curve->push_back(curr_castel->at(0));
+	pts_curve->push_back(curr_castel->at(curr_castel->size()-2) * (1 - t) + curr_castel->at(curr_castel->size()-1) * (t));
 }
 
 //Algorithme de Casteljau
 static GLvoid bezier_casteljau_render()
 {
 
-	pts_curve = new std::deque<point3>();
+//	pts_curve = new std::deque<point3>();
 
-	for (int i = 0; i <= resolution; i++)
+	/*for (int i = 0; i <= resolution; i++)
 	{
 		pts_curve->push_back(bezier_casteljau_compute(controlPointList, i / double(resolution)));
-	}
+	}*/
+
+	bezier_casteljau_compute(controlPointList,0.5);
 }
 
 point3 made_vector (point3 a, point3 b)
@@ -290,7 +295,7 @@ static void RenderScene()
 		glPointSize(10.0f);
 		glDrawArrays(GL_POINTS, 0, controlPointList->size()); //les éléments à utiliser pour le dessin
 	}
-	if (controlPointList->size() > 2)
+	if (pts_curve->size() != 0)
 	{
 		//dessin de la courbe de contrôle
 		glColor3f(0.9, 0.4, 0.4);
@@ -300,9 +305,9 @@ static void RenderScene()
 		glVertexPointer(3, GL_DOUBLE, 0, 0); //description des données pointées
 
 	glDrawArrays(GL_LINE_STRIP, 0, pts_curve->size()); //les éléments à utiliser pour le dessin
+	}
 	
 	glDisableClientState(GL_VERTEX_ARRAY);
-	}
 	glutSwapBuffers();
 }
 
@@ -335,9 +340,12 @@ static GLvoid callback_Mouse(int button, int state, int x, int y) {
 	double x_disp = (x * (10.0 / windowWidth ) ) - 5 ;
 	if (state == GLUT_DOWN && button == GLUT_LEFT_BUTTON)
 	{
-		cout << x_disp << "---" << y_disp << "--- taille " << controlPointList->size() << endl;
 		controlPointList->push_back(point3(x_disp, y_disp, 0.0));
 		CreateVertexBuffer();
+		if (controlPointList->size() > 3)
+		{
+			ComputeGeometry();
+		}
 	}
 
 //cout << "callback_Mouse - " << "mouseAngleX " << mouseAngleX << " mouseAngleY " << mouseAngleY << endl;
@@ -355,22 +363,25 @@ static void InitializeGL() {
 static void CreateVertexBuffer()
 {
 
-		float vertices[controlPointList->size() * 3]; //sommets à 3 coordonnées x,y,z par point
+	float vertices[controlPointList->size() * 3]; //sommets à 3 coordonnées x,y,z par point
 
-		unsigned n = 0;
+	unsigned n = 0;
 
-		for (std::deque<point3>::iterator it = controlPointList->begin(); it != controlPointList->end(); ++it)
-		{
-			vertices[n] = (*it).x;
-			vertices[n + 1] = (*it).y;
-			vertices[n + 2] = (*it).z;
-			n += 3;
-		}
+	for (std::deque<point3>::iterator it = controlPointList->begin(); it != controlPointList->end(); ++it)
+	{
+		vertices[n] = (*it).x;
+		vertices[n + 1] = (*it).y;
+		vertices[n + 2] = (*it).z;
+		n += 3;
+	}
 
-		glGenBuffers(1, &leVBO);																																							 //génération d'une référence de buffer object
-		glBindBuffer(GL_ARRAY_BUFFER, leVBO);																																	 //liaison du buffer avec un type tableau de données
-		glBufferData(GL_ARRAY_BUFFER, sizeof(float) * controlPointList->size() * 3, vertices, GL_STATIC_DRAW); //création et initialisation du container de données (size() sommets -> 3*size() floats)
+	glGenBuffers(1, &leVBO);																																							 //génération d'une référence de buffer object
+	glBindBuffer(GL_ARRAY_BUFFER, leVBO);																																	 //liaison du buffer avec un type tableau de données
+	glBufferData(GL_ARRAY_BUFFER, sizeof(float) * controlPointList->size() * 3, vertices, GL_STATIC_DRAW); //création et initialisation du container de données (size() sommets -> 3*size() floats)
 
+
+	if (pts_curve->size() != 0)
+	{
 		double vertices2[pts_curve->size() * 3]; //sommets à 3 coordonnées x,y,z par point
 
 		n = 0;
@@ -386,56 +397,48 @@ static void CreateVertexBuffer()
 		glGenBuffers(1, &leVBO2);																																					//génération d'une référence de buffer object
 		glBindBuffer(GL_ARRAY_BUFFER, leVBO2);																														//liaison du buffer avec un type tableau de données
 		glBufferData(GL_ARRAY_BUFFER, sizeof(double) * pts_curve->size() * 3, vertices2, GL_STATIC_DRAW); //création et initialisation du container de données (size() sommets -> 3*size() floats)
-	
+	}
 }
 
 
-void InitializeGeometry() {
-
-	//d'après le sujet
-	//P_0(-2,-2,0) P_1=(-1,1,0) P_2=(1,1,0) P_3=(2,-2,0)
-
-
-if(controlPointList->size() > 3)
+void ComputeGeometry() {
+if(bezier_chaikin)
 {
-	if(bezier_chaikin)
-	{
-		if(casteljau)
-			bezier_casteljau_render();
-		else
-			bezier_classic_render();
-	}
+	if(casteljau)
+		bezier_casteljau_render();
 	else
-		chaikin_render();
-
-	curr_deviation = new std::deque<double>;
-	for (unsigned int k = 0; k < pts_curve->size() - 2; ++k)
-	{
-		curr_deviation->push_back(deviation(made_vector(pts_curve->at(k),pts_curve->at(k + 1)),made_vector(pts_curve->at(k+1),pts_curve->at(k + 2))));
-	}
-
-	if (bezier_chaikin)
-	{
-		if (casteljau)
-			cout << "Courbe de Bezier par De Casteljau" << endl;
-		else
-			cout << "Courbe de Bezier" << endl;
-		cout << "Resolution : " << resolution << endl;
-	}
-	else
-	{
-		cout << "Subdivision de Chaikin" << endl;
-		cout << "Nb Chaikin : " << degree_chaikin << endl;
-	}
-
-	cout << "Moyenne de deviation : " << mean_deviation() << endl;
-	cout << "Max de deviation : " << max_deviation() << endl;
-	cout << "Min de deviation : " << min_deviation() << endl;
-	cout << "Nb deviation : " << pts_curve->size() << endl;
-
-	cout << "-----------" << endl;
-	CreateVertexBuffer();
+		bezier_classic_render();
 }
+else
+	chaikin_render();
+
+/*curr_deviation = new std::deque<double>;
+for (unsigned int k = 0; k < pts_curve->size() - 2; ++k)
+{
+	//curr_deviation->push_back(deviation(made_vector(pts_curve->at(k),pts_curve->at(k + 1)),made_vector(pts_curve->at(k+1),pts_curve->at(k + 2))));
+}
+
+if (bezier_chaikin)
+{
+	if (casteljau)
+		cout << "Courbe de Bezier par De Casteljau" << endl;
+	else
+		cout << "Courbe de Bezier" << endl;
+	cout << "Resolution : " << resolution << endl;
+}
+else
+{
+	cout << "Subdivision de Chaikin" << endl;
+	cout << "Nb Chaikin : " << degree_chaikin << endl;
+}
+
+cout << "Moyenne de deviation : " << mean_deviation() << endl;
+cout << "Max de deviation : " << max_deviation() << endl;
+cout << "Min de deviation : " << min_deviation() << endl;
+cout << "Nb deviation : " << pts_curve->size() << endl;
+
+cout << "-----------" << endl;*/
+CreateVertexBuffer();
 }
 
 // fonction de call-back pour la gestion des evenements clavier
@@ -449,12 +452,12 @@ static GLvoid callback_Keyboard(unsigned char key, int x, int y)
 
 	case 'c' : 
 	casteljau = !casteljau;
-	InitializeGeometry();
+	ComputeGeometry();
 	break;
 
 	case 'b':
 		bezier_chaikin = !bezier_chaikin;
-		InitializeGeometry();
+		ComputeGeometry();
 		break;
 
 	case '+':
@@ -466,7 +469,7 @@ static GLvoid callback_Keyboard(unsigned char key, int x, int y)
 		{
 		degree_chaikin++;
 		}
-		InitializeGeometry();
+		ComputeGeometry();
 		break;
 
 	case '-':
@@ -478,12 +481,11 @@ static GLvoid callback_Keyboard(unsigned char key, int x, int y)
 		{
 			degree_chaikin--;
 		}
-		InitializeGeometry();
-			break;
+		ComputeGeometry();
+		break;
 
 	case 'p':
 		control_poly = !control_poly;
-		InitializeGeometry();
 		break;
 
 	default:
@@ -513,8 +515,9 @@ static void InitializeGlutCallbacks()
 	//glutSpecialFunc(&callback_SpecialKeys);
 
 	controlPointList = new std::deque<point3>();
+	pts_curve = new std::deque<point3>();
 
-/*	controlPointList->push_back(point3(-2.0, -2.0, 0.0));
+	/*	controlPointList->push_back(point3(-2.0, -2.0, 0.0));
 	controlPointList->push_back(point3(-1.0, 1.0, 0.0));
 	controlPointList->push_back(point3(1.0, 1.0, 0.0));
 	controlPointList->push_back(point3(2.0, -2.0, 0.0));*/
@@ -542,7 +545,6 @@ int main(int argc, char** argv)
 
 	InitializeGlutCallbacks();
 	InitializeGL();
-	InitializeGeometry();
 
 	glutMainLoop();
 
