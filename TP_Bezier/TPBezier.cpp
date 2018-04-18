@@ -125,26 +125,22 @@ void bezier_casteljau_compute(std::deque<point3>* control_pts, double t)
 		}
 		listControlPoly->push_back(*curr_castel);
 	}
-
-
-	pts_curve->push_back(control_pts->at(0));
-	pts_curve->push_back(prev_castel->at(0));
-	pts_curve->push_back(curr_castel->at(0));
-	pts_curve->push_back(curr_castel->at(curr_castel->size()-2) * (1 - t) + curr_castel->at(curr_castel->size()-1) * (t));
 }
 
 //Algorithme de Casteljau
-static GLvoid bezier_casteljau_render()
+static GLvoid divide_casteljau()
 {
+	std::deque<point3> list_left;
+	std::deque<point3> list_right;
 
-//	pts_curve = new std::deque<point3>();
-
-	/*for (int i = 0; i <= resolution; i++)
+	for (unsigned int k = 0; k < listControlPoly->size(); ++k)
 	{
-		pts_curve->push_back(bezier_casteljau_compute(controlPointList, i / double(resolution)));
-	}*/
+		list_left->push_back(listControlPoly->at(k).front());
+		list_right->push_front(listControlPoly->at(k).back());
+	}
 
-	bezier_casteljau_compute(controlPointList,0.5);
+	
+
 }
 
 point3 made_vector (point3 a, point3 b)
