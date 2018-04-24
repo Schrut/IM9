@@ -5,12 +5,12 @@ compilateur = g++
 preproc_options = -c -Wall
 link_options = -Wall
 libs = -lGLEW -lGL -lGLU -lglut
-main = TPBezier
+main = Projet_Gimenez
 
 all: $(main)
 	@echo "\ncompilation terminee"
 
-$(main): point3.o TPBezier.o
+$(main): point3.o Projet_Gimenez.o
 	@echo "--- compilation de $@ ..."
 	$(compilateur) $(link_options) $^ $(libs) -o $@
 	@echo "--- compilation de $@ terminée"
@@ -18,7 +18,7 @@ $(main): point3.o TPBezier.o
 point3.o: point3.cpp point3.h
 	$(compilateur) $(preproc_options) $<
 
-TPBezier.o: TPBezier.cpp
+Projet_Gimenez.o: Projet_Gimenez.cpp
 	$(compilateur) $(preproc_options) $<
 
 clean:
